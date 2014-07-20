@@ -267,9 +267,10 @@ int dns_perf_valid_qtype(char *qtype)
 
 int dns_perf_parse_args(int argc, char **argv)
 {
+    int queryset, perfset;;
     int c;
 
-    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:f:T:cvh")) != -1) {
+    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:f:T:c:vh")) != -1) {
 
         switch (c) {
         case 'd':
@@ -305,6 +306,7 @@ int dns_perf_parse_args(int argc, char **argv)
                 fprintf(stderr, "Error setting query time %s\n", optarg);
                 return -1;
             }
+            perfset = TRUE;
             break;
 
         case 'Q':
@@ -312,6 +314,7 @@ int dns_perf_parse_args(int argc, char **argv)
                 fprintf(stderr, "Error setting query number %s\n", optarg);
                 return -1;
             }
+            queryset = TRUE;
             break;
 
         case 'c':
@@ -350,6 +353,15 @@ int dns_perf_parse_args(int argc, char **argv)
             fprintf(stderr, "Invalid option: %s\n", optarg);
             return -1;
         }
+    }
+
+    if (queryset == TRUE && perfset == TRUE) {
+        fprintf(stderr, "-Q and -l is exclusive, please set only one\n");
+        return -1;
+    }
+
+    if (g_perf_time != 0) {
+        g_query_number = 100000000;
     }
 
     return 0;
@@ -715,27 +727,27 @@ inline void dns_perf_statistic()
     diff = dns_perf_timer_sub(g_query_end, g_query_start);
     msec = diff.tv_sec * 1000 + diff.tv_usec / 1000;
 
-    printf("\n\nDNS Query Performance Testing Finish\n");
-    printf("\tQuries sent:\t\t%d\n", g_send_number);
-    printf("\tQuries completed:\t%d\n", g_recv_number);
-    printf("\tComplete percentage:\t%.2f%\n\n", g_recv_number * 100.0 / g_send_number);
+    printf("\n[Status]DNS Query Performance Testing Finish\n");
+    printf("[Result]Quries sent:\t\t%d\n", g_send_number);
+    printf("[Result]Quries completed:\t%d\n", g_recv_number);
+    printf("[Result]Complete percentage:\t%.2f%\n\n", g_recv_number * 100.0 / g_send_number);
 
     if (g_report_rcode) {
-        printf("\tRcode=Success:\t%d\n\n", g_success_number);
-        printf("\tRcode=FormatError:\t%d\n\n", g_formerr_number);
-        printf("\tRcode=ServerError:\t%d\n\n", g_serverr_number);
-        printf("\tRcode=NXDOMAIN:\t%d\n\n", g_nxdomain_number);
-        printf("\tRcode=NotImp:\t%d\n\n", g_notimp_number);
-        printf("\tRcode=Refuse:\t%d\n\n", g_refuse_number);
-        printf("\tRcode=Others:\t%d\n\n", g_other_number);
+        printf("[Result]Rcode=Success:\t%d\n\n", g_success_number);
+        printf("[Result]Rcode=FormatError:\t%d\n\n", g_formerr_number);
+        printf("[Result]Rcode=ServerError:\t%d\n\n", g_serverr_number);
+        printf("[Result]Rcode=NXDOMAIN:\t%d\n\n", g_nxdomain_number);
+        printf("[Result]Rcode=NotImp:\t%d\n\n", g_notimp_number);
+        printf("[Result]Rcode=Refuse:\t%d\n\n", g_refuse_number);
+        printf("[Result]Rcode=Others:\t%d\n\n", g_other_number);
     }
 
     elapse = msec * 1.0 / 1000;
-    printf("\tElapsed time(s):\t%.5f\n\n", elapse);
+    printf("[Result]Elapsed time(s):\t%.5f\n\n", elapse);
 
 
     qps = g_send_number / elapse;
-    printf("\tQueirs Per Second:\t%.5f\n", qps);
+    printf("[Result]Queirs Per Second:\t%.5f\n", qps);
 }
 
 
@@ -841,12 +853,11 @@ int main(int argc, char** argv)
 
         dns_perf_cancel_timeout_query();
 
-        dns_perf_whip_query();
-
         /* Is time up? */
         if (g_perf_time != 0) {
             gettimeofday(&now, NULL);
             if (dns_perf_timer_cmp(now, age) > 0) {
+                printf("time up");
                 break;
             }
         }
@@ -856,6 +867,7 @@ int main(int argc, char** argv)
             break;
         }
 
+        dns_perf_whip_query();
     }
 
     gettimeofday(&g_query_end, NULL);
