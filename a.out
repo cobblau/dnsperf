@@ -1,1 +1,4 @@
-www.app1.com A
+# This is a comment and is ommited
+# The columns after column 2 will be ommited if one line contains more than 3 colums.
+www.taobao.com A
+img01.taobaocdn.com CNAME
