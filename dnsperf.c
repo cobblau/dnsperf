@@ -40,6 +40,9 @@ typedef struct timeval timeval_t;
 #define TRUE  1
 #define FALSE 0
 
+#define UDP   1
+#define TCP   2
+
 #define DEFAULT_SERVER    "127.0.0.1"
 #define DEFAULT_PORT      "53"
 #define DEFAULT_TIMEOUT   "3000"      /* ms */
@@ -85,6 +88,7 @@ unsigned int  g_perf_time;
 unsigned int  g_query_number;
 unsigned int  g_concurrent_query;
 unsigned int  g_interval;
+int           g_layer4_protocol = UDP;
 int           g_net_family = AF_INET;
 int           g_print_rcode_num;
 int           g_report_rcode;
@@ -139,6 +143,8 @@ void dns_perf_show_usage()
             "     dns_perf will randomly pick <domain, type> from data file \n"
             "  -l specifies how long to run tests in seconds (no default)\n"
             "  -i specifies interval of queries in seconds (default: 0)\n"
+            "  -P specifies the transport layer protocol to send DNS quires,\n"
+            "     udp or tcp (default: udp)\n"
             "  -f specify address family of DNS transport, inet or inet6 (default: inet)\n"
             "  -v verbose: report the RCODE of each response on stdout\n"
             "  -h print this usage\n"
@@ -270,7 +276,7 @@ int dns_perf_parse_args(int argc, char **argv)
     int queryset, perfset;;
     int c;
 
-    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:f:T:c:vh")) != -1) {
+    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:P:f:T:c:vh")) != -1) {
 
         switch (c) {
         case 'd':
@@ -327,6 +333,17 @@ int dns_perf_parse_args(int argc, char **argv)
         case 'i':
             if (dns_perf_set_uint(&g_interval, optarg) == -1) {
                 fprintf(stderr, "Error setting interval number %s\n", optarg);
+                return -1;
+            }
+            break;
+
+        case 'P':
+            if (strcmp(optarg, "udp") == 0) {
+                g_layer4_protocol = UDP;
+            } else if (strcmp(optarg, "tcp") == 0) {
+                g_layer4_protocol = TCP;
+            } else {
+                fprintf(stderr, "Invalid transport protocol: %s\n", optarg);
                 return -1;
             }
             break;
