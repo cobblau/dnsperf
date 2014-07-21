@@ -614,7 +614,7 @@ inline int dns_perf_cancel_timeout_query()
 
         diff = dns_perf_timer_sub(now, query->sands);
         if (diff.tv_sec * 1000000 + diff.tv_usec >= 0) {
-            printf("delete timeouted query\n");
+            /* delete timeouted queries */
             if (query->state == F_SENDING) {
                 dns_perf_epoll_clear_fd(query->fd, MOD_WR);
             } else if (query->state == F_READING) {
