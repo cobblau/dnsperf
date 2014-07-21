@@ -28,7 +28,7 @@ Dnsperf supports the following command line options:
 **-i**  
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies interval of queries in seconds. The default number is zero. This option is not supported currently.  
 **-P**  
-&nbsp;&nbsp;&nbsp;&nbsp;Specifies the transport layer prototol to send DNS queries, `udp` or `tcp`. As we known, DNS queries can be send either by UDP or TCP, though UDP is the suggested protocol. The default is `udp`. `tcp` is not supported currently, and it will coming soon.  
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the transport layer protocol to send DNS queries, `udp` or `tcp`. As we known, DNS queries can be send either by UDP or TCP, though UDP is the suggested protocol. The default is `udp`. `tcp` is not supported currently, and it will coming soon.  
 **-f**  
 &nbsp;&nbsp;&nbsp;&nbsp;Specify address family of DNS transport, `inet` or `inet6`. The default is `inet`. `inet6` is not supported currently.  
 **-v**  
