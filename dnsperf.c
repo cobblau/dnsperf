@@ -747,7 +747,7 @@ inline void dns_perf_statistic()
 
 
     qps = g_send_number / elapse;
-    printf("[Result]Queirs Per Second:\t%.5f\n", qps);
+    printf("[Result]Queries Per Second:\t%.5f\n", qps);
 }
 
 
@@ -874,13 +874,14 @@ int main(int argc, char** argv)
 
     dns_perf_statistic();
 
+    dns_perf_clear_query();
+
     free(g_data_array);
     free(g_query_array);
     free(g_name_server);
     free(g_data_file_name);
 
     dns_perf_epoll_destroy();
-    dns_perf_clear_query();
 
     return 0;
 }
