@@ -12,9 +12,9 @@ These measures are reported at the end of each testing.
 Dnsperf supports the following command line options:  
 
 **-s**  
-&nbsp;&nbsp;&nbsp;&nbsp;Sets the DNS server's IP address. The default IP is `127.0.0.1`   
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the DNS server's IP address. The default IP is `127.0.0.1`   
 **-p**  
-&nbsp;&nbsp;&nbsp;&nbsp;Sets the DNS server's port. The default Port is `53`   
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the DNS server's port. The default Port is `53`   
 **-d**   
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies the input data file. Input data file contains <domain, query_type> pairs.  
 **-t**  
