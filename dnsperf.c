@@ -83,6 +83,7 @@ typedef struct query_s {
 char         *g_name_server;
 unsigned int  g_name_server_port;
 char         *g_data_file_name;
+char         *g_real_client;
 unsigned int  g_timeout;
 unsigned int  g_perf_time;
 unsigned int  g_query_number;
@@ -142,7 +143,9 @@ void dns_perf_show_usage()
             "  -c specifies the number of concurrent queries (default: %s)\n"
             "     dns_perf will randomly pick <domain, type> from data file \n"
             "  -l specifies how long to run tests in seconds (no default)\n"
-            "  -i specifies interval of queries in seconds (default: 0)\n"
+            "  -i Specifies interval of queries in seconds. The default number is zero.\n"
+            "  -e This will sets the real client IP in query string following the rules \n"
+            "       defined in edns-client-subnet\n"
             "  -P specifies the transport layer protocol to send DNS quires,\n"
             "     udp or tcp (default: udp)\n"
             "  -f specify address family of DNS transport, inet or inet6 (default: inet)\n"
@@ -359,6 +362,14 @@ int dns_perf_parse_args(int argc, char **argv)
             }
             break;
 
+        case 'e':
+            if (dns_perf_set_str(&g_real_client, optarg) == -1) {
+                fprintf(stderr, "Error setting edns client ip %s\n", optarg);
+                return -1;
+            }
+            break;
+
+
         case 'v':
             g_report_rcode = TRUE;
             break;
@@ -460,45 +471,113 @@ int dns_perf_data_array_init()
 }
 
 /*
+ * Do I need write description to this file? I don't think so.
+ *
+ */
+int dns_perf_generate_query(query_t *query, char **output, int *outlen)
+{
+    static unsigned short query_id = 0;
+	static u_char         str[PACKETSZ + 1], *p;
+	int                   len = PACKETSZ;
+	unsigned short        net_id;
+	char                 *q;
+	HEADER               *hp;
+    in_addr_t             addr;
+
+
+	len = res_mkquery(QUERY, query->data->domain, C_IN, query->data->qtype, NULL,
+                      0, NULL, str, PACKETSZ);
+	if (len == -1) {
+		fprintf(stderr, "Failed to create query packet: %s %d\n", query->data->domain,
+                query->data->qtype);
+		return -1;
+	}
+
+    hp = (HEADER *) str;
+	hp->rd = 1;    /* recursion */
+
+    query_id++;
+    query->id = query_id;
+
+    /* set message id */
+    net_id = htons(query_id);
+    q = (char *) &net_id;
+	str[0] = q[0];
+	str[1] = q[1];
+
+    if (g_real_client) {
+        str[11] = 1;   /* set additional count to  1 */
+
+        p = str + len; /* p points to additional section */
+
+        *p++ = 0;      /* root name */
+
+        *p++ = 0;      /* OPT */
+        *p++ = 41;
+
+        *p++ = 4;      /* UDP payload size: 1024 */
+        *p++ = 0;
+
+        *p++ = 0;      /* extended RCODE and flags */
+        *p++ = 0;
+        *p++ = 0;
+        *p++ = 0;
+
+        *p++ = 0;      /* edns-client-subnet's length */
+        *p++ = 12;
+
+        /* edns-client-subnet */
+        *p++ = 0;      /* option code: 8 */
+        *p++ = 8;
+
+        *p++ = 0;      /* option length: 8 */
+        *p++ = 8;
+
+        *p++ = 0;      /* family: 1 */
+        *p++ = 1;
+
+        *p++ = 32;     /* source netmask: 32 */
+        *p++ = 0;      /* scope netmask: 0 */
+
+        addr = inet_addr(g_real_client);  /* client subnet */
+        q = (char *) &addr;
+
+        *p++ = *q++;
+        *p++ = *q++;
+        *p++ = *q++;
+        *p++ = *q++;
+
+        len += 23;
+    }
+
+    *output = (char *) str;
+    *outlen = len;
+
+    return 0;
+}
+
+
+/*
  * Desc:
  *     Package q to DNS message and send to remote name server.
  *
  */
 int dns_perf_query_dispatch(query_t *q)
 {
-    static unsigned short query_id = 0;
-	static u_char output[PACKETSZ + 1];
-	int           out_len = PACKETSZ;
-	int           ret;
-	unsigned short int net_id;
-	char              *id_ptr;
-	HEADER            *hp = (HEADER *)output;
-    timeval_t          tv;
+    char      *query_str;
+	int        ret, len;
+    timeval_t  tv;
 
 
-	out_len = res_mkquery(QUERY, q->data->domain, C_IN, q->data->qtype, NULL, 0,
-				 NULL, output, PACKETSZ);
-	if (out_len == -1) {
-		fprintf(stderr, "Failed to create query packet: %s %d\n", q->data->domain,
-                q->data->qtype);
-		return -1;
-	}
-	hp->rd = 1;
-
-    query_id++;
-    q->id = query_id;
-
-    net_id = htons(query_id);
-    id_ptr = (char *) &net_id;
-
-	output[0] = id_ptr[0];
-	output[1] = id_ptr[1];
+    if (dns_perf_generate_query(q, &query_str, &len) != 0) {
+        return -1;
+    }
 
     /* send query to remote name server */
     gettimeofday(&tv, NULL);
     q->sands = dns_perf_timer_add_long(tv, g_timeout * 1000);
 
-    ret = send(q->fd, output, out_len, 0);
+    ret = send(q->fd, query_str, len, 0);
     if (ret < 0) {
         if (errno != EWOULDBLOCK && errno != EAGAIN) {
             goto error;
@@ -511,7 +590,7 @@ int dns_perf_query_dispatch(query_t *q)
         }
 
     } else { /* already send */
-        if (ret != out_len) {
+        if (ret != len) {
             fprintf(stderr, "Error send request partially\n");
             goto error;
         }
