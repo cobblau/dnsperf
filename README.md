@@ -16,13 +16,13 @@ Dnsperf supports the following command line options:
 **-p**
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies the DNS server's port. The default Port is `53`  
 **-d**
-&nbsp;&nbsp;&nbsp;&nbsp;Specifies the input data file. Input data file contains <domain, query_type> pairs.  
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the input data file. Input data file contains `query domain` and `query type`.  
 **-t**
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies the timeout for query completion in millisecond. The default timeout is `3000ms`.  
 **-Q**
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies the max number of queries to be send. The default number is `1000`.  
 **-c**
-&nbsp;&nbsp;&nbsp;&nbsp;Specifies the number of concurrent queries. The default number is `100`. Dnsperf will randonly pick <domain, type> from data file as a query.  
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the number of concurrent queries. The default number is `100`. Dnsperf will randonly pick `query domain` from data file as a query.  
 **-l**
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies how long to run tests in seconds. The default number is infinite.  
 **-e**
@@ -31,7 +31,7 @@ Dnsperf supports the following command line options:
 **-i**
 &nbsp;&nbsp;&nbsp;&nbsp;Specifies interval of queries in seconds. The default number is zero. This option is not supported currently.  
 **-P**
-&nbsp;&nbsp;&nbsp;&nbsp;Specifies the transport layer protocol to send DNS queries, `udp` or `tcp`. As we known, DNS queries can be send either by UDP or TCP, though UDP is the suggested protocol. The default is `udp`. `tcp` is not supported currently, and it will coming soon.  
+&nbsp;&nbsp;&nbsp;&nbsp;Specifies the transport layer protocol to send DNS queries, `udp` or `tcp`. As we known, although UDP is the suggested protocol, DNS queries can be send either by UDP or TCP. The default is `udp`. `tcp` is not supported currently, and it will coming soon.  
 **-f**
 &nbsp;&nbsp;&nbsp;&nbsp;Specify address family of DNS transport, `inet` or `inet6`. The default is `inet`. `inet6` is not supported currently.  
 **-v**
@@ -41,7 +41,8 @@ Dnsperf supports the following command line options:
 
 ### Data file format
 An example of data file format is shown in `a.out` in project directory.
-In the file, the line begin with `#` is recgonized as comment and ommited. Each useful line contains two columns. The first column is the `domain name` to be queried, and the second column is the `query type`. The `query type` currently supported includes:`A`,`NS`,`MD`,`MF`,`CNAME`,`SOA`,`MB`,`MG`,`MR`,`NULL`,`WKS`,`PTR`,`HINFO`,`MINFO`,`MX`,`TXT`,`AAAA`,`SRV`,`NAPTR`,`A6`,`ASFR`,`MAILB`,`MAILA`,`ANY`.
+In the file, the line begin with `#` is recgonized as comment. Each useful line contains two columns. The first column is the `domain name` to be queried, and the second column is the `query type`.  
+The `query type` currently supported includes:  `A`,`NS`,`MD`,`MF`,`CNAME`,`SOA`,`MB`,`MG`,`MR`,`NULL`,`WKS`,`PTR`,`HINFO`,`MINFO`,`MX`,`TXT`,`AAAA`,`SRV`,`NAPTR`,`A6`,`ASFR`,`MAILB`,`MAILA`,`ANY`.
 
 ### Performance Statistics
 Performance statistics will displayed on your `stdin` after testing. I believe you are intelligent enough to understand the outputs.
