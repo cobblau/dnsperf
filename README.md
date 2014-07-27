@@ -45,7 +45,23 @@ In the file, the line begin with `#` is recgonized as comment. Each useful line 
 The `query type` currently supported includes:  `A`,`NS`,`MD`,`MF`,`CNAME`,`SOA`,`MB`,`MG`,`MR`,`NULL`,`WKS`,`PTR`,`HINFO`,`MINFO`,`MX`,`TXT`,`AAAA`,`SRV`,`NAPTR`,`A6`,`ASFR`,`MAILB`,`MAILA`,`ANY`.
 
 ### Performance Statistics
-Performance statistics will displayed on your `stdin` after testing. I believe you are intelligent enough to understand the outputs.
+Performance statistics will displayed on your `stdin` after testing. The following is a sample outputs.
+```sh
+DNS Performance Testing Tool
+
+[Status] Processing query data
+[Status] Sending queries to 127.0.0.1:53
+time up
+[Status]DNS Query Performance Testing Finish
+[Result]Quries sent:		35650
+[Result]Quries completed:	35578
+[Result]Complete percentage:	99.80%
+
+[Result]Elapsed time(s):	1.00000
+
+[Result]Queries Per Second:	35650.0000
+```
+I believe you are intelligent enough to understand the outputs.
 
 ### Author
 Cobblau, <keycobing@gmail.com>
