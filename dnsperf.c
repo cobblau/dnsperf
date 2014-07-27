@@ -134,7 +134,9 @@ void dns_perf_show_usage()
 {
     fprintf(stderr,"\n"
             "Usage: dnsperf [-d datafile] [-s server_addr] [-p port] [-q num_queries]\n"
-            "               [-t timeout] [-l limit] [-f family] [-T qps] [-c] [-v] [-h]\n\n"
+            "               [-t timeout] [-Q max queries] [-c concurrent queries]\n"
+            "               [-l running time] [-e real client ip] [-P udp|tcp]\n"
+            "               [-f family] [-T qps] [-c] [-v] [-h]\n\n"
             "  -d specifies the input data file (default: stdin)\n"
             "  -s sets the dns server's address (default: %s)\n"
             "  -p sets the dns server's port (default: %s)\n"
@@ -279,7 +281,7 @@ int dns_perf_parse_args(int argc, char **argv)
     int queryset, perfset;;
     int c;
 
-    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:P:f:T:c:vh")) != -1) {
+    while((c = getopt(argc, argv, "d:s:p:t:l:Q:q:i:P:f:T:c:e:vh")) != -1) {
 
         switch (c) {
         case 'd':
