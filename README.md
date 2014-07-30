@@ -61,7 +61,7 @@ time up
 
 [Result]Queries Per Second:	35650.0000
 ```
-I believe you are intelligent enough to understand the outputs.
+The outputs above is easy to comprehend.
 
 ### Author
 Cobblau, <keycobing@gmail.com>
