@@ -10,7 +10,7 @@ typedef enum {                  /* OP Code */
     DNS_OPCODE_STSTUS = 2,      /* DNS status query */
     DNS_OPCODE_NOTIFY = 4,
     DNS_OPCODE_UPDATE = 5
-} ph_dns_qcode_t;
+} dns_qcode_t;
 
 typedef enum{                  /* Query Classes */
     DNS_CLASS_UNKNOWN = -1,    /* Unknown */
@@ -19,7 +19,7 @@ typedef enum{                  /* Query Classes */
     DNS_CLASS_HESIOD  = 4,     /* HESIOD (obsolete) */
     DNS_CLASS_NONE    = 254,   /* NONE (RFC 2136) */
     DNS_CLASS_ANY     = 255    /* ANY */
-} ph_dns_class_t;
+} dns_class_t;
 
 typedef enum{                    /* Query Code */
     DNS_RCODE_UNKNOWN  = -1,
@@ -45,7 +45,7 @@ typedef enum{                    /* Query Code */
     DNS_RCODE_BADMODE  = 19,      /* bad tkey mode. RFC2930 */
     DNS_RCODE_BADNAME  = 20,      /* duplicate key name. RFC2930 */
     DNS_RCODE_BADALG   = 21       /* algorithm not supported. RFC2930 */
-} ph_dns_rcode_t;
+} dns_rcode_t;
 
 
 typedef enum {                    /* Query types */
@@ -116,7 +116,7 @@ typedef enum {                    /* Query types */
     DNS_RR_CAA         = 257,     /* Certification Authority Restriction */
     DNS_RR_TA          = 32768,   /* DNSSEC Trust Authorities */
     DNS_RR_DLV         = 32769    /* DNSSEC Lookaside Validation */
-} ph_dns_rrtype_t;
+} dns_rrtype_t;
 
 /* DNS EDNS0 Option Codes (OPT) */
 typedef enum {
@@ -127,9 +127,9 @@ typedef enum {
     DNS_OPTTYPE_DHU           = 5,
     DNS_OPTTYPE_N3U           = 6,
     DNS_OPTTYPE_CLIENT_SUBNET = 8
-} ph_dns_opttype_t;
+} dns_opttype_t;
 
-#define PH_DNS_MESSAGE_HEADER_LEN		12
+#define DNS_MESSAGE_HEADER_LEN		12
 
 /* DNS Header Flags */
 #define DNS_HEADER_FLAG_QR		0x8000U     /* Query-Response bit */
@@ -159,5 +159,8 @@ typedef enum {
 
 #define DNS_NAME_COMPRESS_LABEL     0x00U
 #define DNS_NAME_COMPRESS_POINTER   0xC0U
+
+#define DNS_MAX_NAME_LEN        255
+#define DNS_MAX_LABEL_LEN       63
 
 #endif
