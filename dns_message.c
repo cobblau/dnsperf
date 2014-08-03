@@ -96,35 +96,71 @@ dns_message_rendered_len(dns_message_t *m)
     char        compress_table[64][DNS_MAX_NAME_LEN];
     dns_name_t *n;
 
+
+    compress_len = 0;
+
     /* Header length */
     size = DNS_MESSAGE_HEADER_LEN;
 
-    compress_len = 0;
+    /* render question section */
+    if (m->counts[DNS_SECTION_QUESTION] > 0) {
+
+        /* only pack the first question */
+        n = LIST_HEAD(m->sections[i]);
+
+        memcpy(compress_table[compress_len++], n, strlen(n->name));
+        size = size + strlen(n->name) + 2;
+
+        size = size + 2 + 2;  /* qtype(2) + class(2) */
+    }
+
+    /* render other sections */
     for (i = DNS_SECTION_ANSWER; i < DNS_SECTION_MAX; i++) {
 
         if (m->counts[i] == 0) {
             continue;
         }
 
-        for (n = LIST_HEAD(m->sections[i]); n != NULL; n = LIST_NEXT(n, link))
-        {
+        for (n = LIST_HEAD(m->sections[i]); n != NULL; n = LIST_NEXT(n, link)) {
+
             for (j = 0; j < compress_len; j++) {
 
                 clen = dns_name_compress(compress_table[j], n->name, &offset);
                 if (clen == -2) {
                     /* if name can't be compressed */
                     memcpy(compress_table[compress_len++], n, strlen(n->name));
+                    size = size + strlen(n->name) + 2;
                     break;
                 } else {
                     /* name can be compressed, `clen' is the start position of the
                        compressed part */
-                    size += clen + 1 + 2;
+                    size = size + clen + 1 + 2;
                 }
             }
 
-            size += 2 + 2 + 4 + 2;
+            size = size + 2 + 2 + 4 + 2;
 
-            /*TODO: compress rdata */
+            /* do not pack a and aaaa */
+            if (n->type == DNS_RR_A || n->type == DNS_RR_AAAA) {
+                size = size + n->rdlength;
+                break;
+            }
+
+            for (j = 0; j < compress_len; j++) {
+
+                clen = dns_name_compress(compress_table[j], n->name, &offset);
+                if (clen == -2) {
+                    /* if name can't be compressed */
+                    memcpy(compress_table[compress_len++], n, strlen(n->name));
+                    size = size + strlen(n->name) + 2;
+                    break;
+                } else {
+                    /* name can be compressed, `clen' is the start position of the
+                       compressed part */
+                    size = size + clen + 1 + 2;
+                }
+            }
+
         }
     }
 
@@ -138,4 +174,8 @@ dns_message_render(dns_message_t *msg, char *buf, int len)
 }
 
 
-int dns_message_parse(dns_message_t *msg, char *buf, int len);
+int
+dns_message_parse(dns_message_t *msg, char *buf, int len)
+{
+
+}
