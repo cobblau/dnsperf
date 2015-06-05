@@ -31,10 +31,11 @@
 
 #include <events.h>
 #include <sock.h>
+
+
 /*
  * Defines.
  */
-
 typedef struct timeval timeval_t;
 
 #define TRUE  1
@@ -78,7 +79,6 @@ typedef struct query_s {
 
 /*
  * Global vars.
- *
  */
 char         *g_name_server;
 unsigned int  g_name_server_port;
@@ -763,8 +763,7 @@ inline int dns_perf_prepare()
 
 
 /*
- * Whip query_t to make it as busier as possible.
- *
+ * Whip query_t to make it as busy as possible.
  */
 inline int dns_perf_whip_query()
 {
