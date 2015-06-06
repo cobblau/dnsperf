@@ -200,9 +200,17 @@ int dns_perf_set_uint(unsigned int *dst, char *src)
 	return 0;
 }
 
-void sig_int_handler(int sig)
+void sig_handler(int signo)
 {
-    g_stop = 1;
+    switch (signo) {
+    case SIGINT:
+    case SIGTERM:
+        g_stop = 1;
+        break;
+
+    default:
+        break;
+    }
 }
 
 timeval_t dns_perf_timer_sub(timeval_t a, timeval_t b)
@@ -889,9 +897,6 @@ int dns_perf_setup(int argc, char **argv)
         return -1;
     }
 
-    if (dns_perf_epoll_init() == -1) {
-        return -1;
-    }
 
     return 0;
 }
@@ -906,7 +911,8 @@ int main(int argc, char** argv)
 
 
     dns_perf_show_info();
-    signal(SIGINT, sig_int_handler);
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
 
     if (dns_perf_setup(argc, argv) == -1) {
         return -1;
@@ -914,6 +920,10 @@ int main(int argc, char** argv)
 
     printf("[Status] Processing query data\n");
     if (dns_perf_prepare() == -1) {
+        return -1;
+    }
+
+    if (dns_perf_epoll_init() == -1) {
         return -1;
     }
 

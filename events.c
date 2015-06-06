@@ -19,13 +19,23 @@
 
 #include <events.h>
 
+#ifdef HAVE_EPOLL
+#include <sys/epoll.h>
+#endif
 
-extern int                  g_epoll_fd;
-extern struct epoll_event  *g_epoll_events;
+#ifdef HAVE_KQUEUE
+#include <sys/event.h>
+#endif
 
-static struct fdtab *g_fdtab = NULL;     /* array of all the file descriptors */
+static struct fdtab        *g_fdtab = NULL;     /* array of all the file descriptors */
+static dns_perf_eventsys_t *dns_perf_eventsys = NULL;
 
-int dns_perf_epoll_init(void)
+#ifdef HAVE_EPOLL
+
+static int                  g_epoll_fd;
+static struct epoll_event  *g_epoll_events;
+
+static int dns_perf_epoll_init(void)
 {
     int                 fd;
     struct epoll_event *ee;
@@ -72,7 +82,7 @@ fail_fd:
 }
 
 
-void dns_perf_epoll_destroy(void)
+static void dns_perf_epoll_destroy(void)
 {
     free(g_epoll_events);
     g_epoll_events = NULL;
@@ -87,12 +97,12 @@ void dns_perf_epoll_destroy(void)
 }
 
 /* do epoll wait */
-int dns_perf_do_epoll(long timeout)
+static int dns_perf_do_epoll(long timeout)
 {
     return epoll_wait(g_epoll_fd, g_epoll_events, MAX_EPOLL_SOCKS, timeout);
 }
 
-int dns_perf_epoll_set_fd(int fd, int mod, void *arg)
+static int dns_perf_epoll_set_fd(int fd, int mod, void *arg)
 {
     int                opcode;
     struct epoll_event ev;
@@ -126,7 +136,7 @@ int dns_perf_epoll_set_fd(int fd, int mod, void *arg)
     return 0;
 }
 
-int dns_perf_epoll_clear_fd(int fd, int mod)
+static int dns_perf_epoll_clear_fd(int fd, int mod)
 {
     int                opcode;
     struct epoll_event ev;
@@ -155,12 +165,12 @@ int dns_perf_epoll_clear_fd(int fd, int mod)
     return 0;
 }
 
-void *dns_perf_get_arg_by_fd(int fd, int mod)
+static void *dns_perf_epoll_get_obj_by_fd(int fd, int mod)
 {
     return g_fdtab[fd].cb[mod].arg;
 }
 
-int dns_perf_is_fdset(int fd, int mod)
+static int dns_perf_epoll_is_fdset(int fd, int mod)
 {
     if(((mod == MOD_RD) && ((g_fdtab[fd].events & EPOLLIN) == EPOLLIN)) ||
        ((mod == MOD_WR) && ((g_fdtab[fd].events & EPOLLOUT) == EPOLLOUT)))
@@ -170,3 +180,39 @@ int dns_perf_is_fdset(int fd, int mod)
 
     return 0;
 }
+
+
+static dns_perf_eventsys_t dns_perf_epoll_eventsys = {
+    "epoll",
+    dns_perf_epoll_init,
+    dns_perf_do_epoll,
+    dns_perf_epoll_set_fd,
+    dns_perf_epoll_clear_fd,
+    dns_perf_epoll_destroy,
+    dns_perf_epoll_get_obj_by_fd,
+    dns_perf_epoll_is_fdset
+};
+
+#endif  /* HAVE_EPOLL */
+
+int dns_perf_set_event_sys() {
+    int set = -1;
+
+#ifdef HAVE_EPOLL
+    dns_perf_eventsys = &dns_perf_epoll_eventsys;
+    set = 0;
+#elif defined HAVE_KQUEUE
+    dns_perf_eventsys = $dns_perf_kqueue_eventsys;
+    set = 0;
+#endif
+
+    return -1;
+}
+
+#define dns_perf_eventsys_init()                 dns_perf_eventsys->init()
+#define dns_perf_eventsys_wait(t)                dns_perf_eventsys->dispatch(t)
+#define dns_perf_eventsys_destroy()              dns_perf_eventsys->destroy()
+#define dns_perf_eventsys_is_fdset(fd)           dns_perf_eventsys->is_fdset(fd)
+#define dns_perf_eventsys_clear_fd(fd, mod)      dns_perf_eventsys->clear_fd(fd, mod)
+#define dns_perf_eventsys_set_fd(fd, mod, obj)   dns_perf_eventsys->set_fd(fd, mod, obj)
+#define dns_perf_eventsys_get_obj_by_fd(fd, mod) dns_perf_eventsys->get_obj_by_fd(fd, mod)
