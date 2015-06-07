@@ -6,29 +6,38 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <sys/epoll.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+
 
 #define MOD_RD   0
 #define MOD_WR   1
 
-#define MAX_EPOLL_SOCKS  10000
+#define MAX_EVENT_SOCKS  10000
 
 /* info about one given fd */
-struct fdtab {
-    unsigned char events;
+struct fddata {
+    int events;
     struct {
         void  *arg;
     } cb[2];
 };
 
-int  dns_perf_epoll_init(void);
-void dns_perf_epoll_destroy(void);
-int  dns_perf_epoll_set_fd(int fd, int dir, void *p);
-int  dns_perf_epoll_clear_fd(int fd, int dir);
-void *dns_perf_get_arg_by_fd(int fd, int dir);
-int  dns_perf_is_fdset(int fd, int dir);
-int  dns_perf_do_epoll(long timeout);
+typedef struct dns_perf_event_ops_s {
+    int (*send)(void *arg);
+    int (*recv)(void *arg);
+} dns_perf_event_ops_t;
+
+
+typedef struct dns_perf_eventsys_s {
+    const char *name;
+    int   (*init)(void);
+    int   (*dispatch)(long timeout);
+    int   (*set_fd)(int fd, int mod, void *p);
+    int   (*clear_fd)(int fd, int mod);
+    int   (*destroy)(void);
+    void *(*get_obj_by_fd)(int fd, int mod);
+    int   (*is_fdset)(int fd, int mod);
+} dns_perf_eventsys_t;
 
 #endif
