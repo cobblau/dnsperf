@@ -67,12 +67,23 @@ typedef struct data_s {
 } data_t;
 
 typedef struct query_s {
-    data_t       *data;
+    dns_perf_event_ops_t ops;
 
     int           id;
     int           fd;          /* socket fd */
+
+    u_char        send_buf[PACKETSZ];
+    int           send_len;
+    int           send_pos;
+
+    /* DNS respond maybe bigger than PACKETSZ, but we only read PACKETSZ bytes */
+    u_char        recv_buf[PACKETSZ];
+    int           recv_pos;
+
     unsigned int  state;
     timeval_t     sands;
+
+    data_t       *data;
 } query_t;
 
 
@@ -482,43 +493,41 @@ int dns_perf_data_array_init()
 
 /*
  * Do I need write description to this file? I don't think so.
- *
  */
-int dns_perf_generate_query(query_t *query, char **output, int *outlen)
+int dns_perf_generate_query(query_t *q)
 {
     static unsigned short query_id = 0;
-	static u_char         str[PACKETSZ + 1], *p;
-	int                   len = PACKETSZ;
-	unsigned short        net_id;
-	char                 *q;
-	HEADER               *hp;
+    int                   len;
+    unsigned short        net_id;
+    char                 *p, *t;
+    HEADER               *hp;
     in_addr_t             addr;
 
 
-	len = res_mkquery(QUERY, query->data->domain, C_IN, query->data->qtype, NULL,
-                      0, NULL, str, PACKETSZ);
-	if (len == -1) {
-		fprintf(stderr, "Failed to create query packet: %s %d\n", query->data->domain,
-                query->data->qtype);
-		return -1;
-	}
+    len = res_mkquery(QUERY, q->data->domain, C_IN, q->data->qtype, NULL,
+                      0, NULL, q->send_buf, sizeof(q->send_buf));
+    if (len == -1) {
+        fprintf(stderr, "Failed to create query packet: %s %d\n", q->data->domain,
+                q->data->qtype);
+        return -1;
+    }
 
     hp = (HEADER *) str;
-	hp->rd = 1;    /* recursion */
+    hp->rd = 1;    /* recursion */
 
     query_id++;
-    query->id = query_id;
+    q->id = query_id;
 
     /* set message id */
     net_id = htons(query_id);
-    q = (char *) &net_id;
-	str[0] = q[0];
-	str[1] = q[1];
+    p = (char *) &net_id;
+    q->send_buf[0] = q[0];
+    q->send_buf[1] = q[1];
 
     if (g_real_client) {
-        str[11] = 1;   /* set additional count to  1 */
+        q->send_buf[11] = 1;   /* set additional count to  1 */
 
-        p = str + len; /* p points to additional section */
+        p = q->send_buf + len; /* p points to additional section */
 
         *p++ = 0;      /* root name */
 
@@ -550,77 +559,21 @@ int dns_perf_generate_query(query_t *query, char **output, int *outlen)
         *p++ = 0;      /* scope netmask: 0 */
 
         addr = inet_addr(g_real_client);  /* client subnet */
-        q = (char *) &addr;
+        t = (char *) &addr;
 
-        *p++ = *q++;
-        *p++ = *q++;
-        *p++ = *q++;
-        *p++ = *q++;
+        *p++ = *t++;
+        *p++ = *t++;
+        *p++ = *t++;
+        *p++ = *t++;
 
         len += 23;
     }
 
-    *output = (char *) str;
-    *outlen = len;
+    q->send_len = len;
+    q->send_pos = 0;
 
     return 0;
 }
-
-
-/*
- * Desc:
- *     Package q to DNS message and send to remote name server.
- *
- */
-int dns_perf_query_dispatch(query_t *q)
-{
-    char      *query_str;
-	int        ret, len;
-    timeval_t  tv;
-
-
-    if (dns_perf_generate_query(q, &query_str, &len) != 0) {
-        return -1;
-    }
-
-    /* send query to remote name server */
-    gettimeofday(&tv, NULL);
-    q->sands = dns_perf_timer_add_long(tv, g_timeout * 1000);
-
-    ret = send(q->fd, query_str, len, 0);
-    if (ret < 0) {
-        if (errno != EWOULDBLOCK && errno != EAGAIN) {
-            goto error;
-        }
-
-        q->state = F_SENDING;
-        if (dns_perf_epoll_set_fd(q->fd, MOD_WR, q) == -1) {
-            fprintf(stderr, "Error set write fd:%d\n", q->fd);
-            goto error;
-        }
-
-    } else { /* already send */
-        if (ret != len) {
-            fprintf(stderr, "Error send request partially\n");
-            goto error;
-        }
-
-        q->state = F_READING;
-        if (dns_perf_epoll_set_fd(q->fd, MOD_RD, q) == -1) {
-            fprintf(stderr, "Error set read fd:%d\n", q->fd);
-            goto error;
-        }
-    }
-
-    g_send_number++;
-    return 0;
-
- error:
-    close(q->fd);
-    q->state = F_UNUSED;
-    return 0;
-}
-
 
 
 int dns_perf_query_process_response(query_t *q, unsigned short id, unsigned short flag)
@@ -666,15 +619,60 @@ int dns_perf_query_process_response(query_t *q, unsigned short id, unsigned shor
 }
 
 
-int dns_perf_query_read(query_t *q)
+int dns_perf_query_send(void *arg)
 {
-	static u_char input[1024];
+    int ret;
+    query_t *q = arg;
+
+
+    ret = send(q->fd, q->send_buf + q->send_pos, q->send_len - q->send_pos, 0);
+    if (ret < 0) {
+        if (errno != EWOULDBLOCK && errno != EAGAIN) {
+            goto error;
+        }
+
+        q->state = F_SENDING;
+        if (dns_perf_eventsys_set_fd(q->fd, MOD_WR, q) == -1) {
+            fprintf(stderr, "Error set write fd:%d\n", q->fd);
+            goto error;
+        }
+
+    } else { /* already send */
+        if (ret != q->send_len) {
+            q->state = F_SENDING;
+            q->send_pos += ret;
+            if (dns_perf_eventsys_set_fd(q->fd, MOD_WR, q) == -1) {
+                fprintf(stderr, "Error set write fd:%d\n", q->fd);
+                goto error;
+            }
+        }
+
+        q->state = F_READING;
+        if (dns_perf_eventsys_set_fd(q->fd, MOD_RD, q) == -1) {
+            fprintf(stderr, "Error set read fd:%d\n", q->fd);
+            goto error;
+        }
+    }
+
+    return 0;
+
+ error:
+    close(q->fd);
+    q->state = F_UNUSED;
+
+    return 0;
+}
+
+int dns_perf_query_recv(void *arg)
+{
+    static u_char input[1024];
     int           ret;
     unsigned short  id;
     unsigned short  flags;
+    query_t        *q = arg;
 
 
-    ret = recv(q->fd, input, 1024, 0);
+    ret = recv(q->fd, q->recv_buf + q->recv_pos, sizeof(q->recv_buf) - q->recv_pos, 0);
 
     if (ret < 0) {
         if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -683,7 +681,7 @@ int dns_perf_query_read(query_t *q)
             return 0;
         }
 
-        if (dns_perf_epoll_set_fd(q->fd, MOD_RD, q) == -1) {
+        if (dns_perf_eventsys_set_fd(q->fd, MOD_RD, q) == -1) {
             close(q->fd);
             q->state = F_UNUSED;
             return 0;
@@ -722,9 +720,9 @@ inline int dns_perf_cancel_timeout_query()
         if (diff.tv_sec * 1000000 + diff.tv_usec >= 0) {
             /* delete timeouted queries */
             if (query->state == F_SENDING) {
-                dns_perf_epoll_clear_fd(query->fd, MOD_WR);
+                dns_perf_eventsys_clear_fd(query->fd, MOD_WR);
             } else if (query->state == F_READING) {
-                dns_perf_epoll_clear_fd(query->fd, MOD_RD);
+                dns_perf_eventsys_clear_fd(query->fd, MOD_RD);
             }
 
             close(query->fd);
@@ -761,8 +759,10 @@ inline int dns_perf_prepare()
         q = &g_query_array[i];
 
         q->data = &g_data_array[index];
-        q->id = -1;
-        q->fd = -1;
+        q->ops.send = dns_perf_query_send;
+        q->ops.recv = dns_perf_query_recv;
+        q->id = q->fd = -1;
+        q->send_pos = q->recv_pos = 0;
         q->state = F_UNUSED;
     }
 
@@ -775,8 +775,9 @@ inline int dns_perf_prepare()
  */
 inline int dns_perf_whip_query()
 {
-    int i;
+    int       i;
     query_t  *q;
+    timeval_t tv;
 
     for (i = 0; i < g_concurrent_query; i++) {
 
@@ -795,7 +796,19 @@ inline int dns_perf_whip_query()
 
         q->state = F_CONNECTING;
 
-        dns_perf_query_dispatch(q);
+        if (dns_perf_generate_query(q) != 0) {
+            reutrn -1;
+        }
+
+        gettimeofday(&tv, NULL);
+        q->sands = dns_perf_timer_add_long(tv, g_timeout * 1000);
+
+        /* send query to remote name server */
+        if (dns_perf_query_send(q) == -1) {
+            continue;
+        }
+
+        g_send_number++;
     }
 
     return 0;
@@ -923,7 +936,11 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    if (dns_perf_epoll_init() == -1) {
+    if (dns_perf_set_event_sys() == -1) {
+        return -1;
+    }
+
+    if (dns_perf_eventsys_init() == -1) {
         return -1;
     }
 
@@ -938,25 +955,7 @@ int main(int argc, char** argv)
     }
 
     while (g_stop == 0) {
-        nevents = dns_perf_do_epoll(g_timeout);
-
-        for (i = 0; i < nevents; i++) {
-            fd = g_epoll_events[i].data.fd;
-
-            if (g_epoll_events[i].events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-                query = dns_perf_get_arg_by_fd(fd, MOD_WR);
-                dns_perf_epoll_clear_fd(fd, MOD_WR);
-
-                dns_perf_query_read(query);
-            }
-
-            if (g_epoll_events[i].events & (EPOLLIN | EPOLLERR | EPOLLHUP)) {
-                query = dns_perf_get_arg_by_fd(fd, MOD_RD);
-                dns_perf_epoll_clear_fd(fd, MOD_RD);
-
-                dns_perf_query_read(query);
-            }
-        }
+        dns_perf_eventsys_dispatch();
 
         dns_perf_cancel_timeout_query();
 
@@ -988,7 +987,7 @@ int main(int argc, char** argv)
     free(g_name_server);
     free(g_data_file_name);
 
-    dns_perf_epoll_destroy();
+    dns_perf_eventsys_destroy();
 
     return 0;
 }
