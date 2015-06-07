@@ -40,4 +40,16 @@ typedef struct dns_perf_eventsys_s {
     int   (*is_fdset)(int fd, int mod);
 } dns_perf_eventsys_t;
 
+
+extern dns_perf_eventsys_t *dns_perf_eventsys;
+
+int dns_perf_set_event_sys();
+#define dns_perf_eventsys_init()                 dns_perf_eventsys->init()
+#define dns_perf_eventsys_destroy()              dns_perf_eventsys->destroy()
+#define dns_perf_eventsys_dispatch(t)            dns_perf_eventsys->dispatch(t)
+#define dns_perf_eventsys_is_fdset(fd)           dns_perf_eventsys->is_fdset(fd)
+#define dns_perf_eventsys_clear_fd(fd, mod)      dns_perf_eventsys->clear_fd(fd, mod)
+#define dns_perf_eventsys_set_fd(fd, mod, obj)   dns_perf_eventsys->set_fd(fd, mod, obj)
+#define dns_perf_eventsys_get_obj_by_fd(fd, mod) dns_perf_eventsys->get_obj_by_fd(fd, mod)
+
 #endif

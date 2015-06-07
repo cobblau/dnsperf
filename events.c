@@ -28,7 +28,7 @@
 #endif
 
 
-static dns_perf_eventsys_t *dns_perf_eventsys = NULL;
+dns_perf_eventsys_t *dns_perf_eventsys = NULL;
 
 #ifdef HAVE_EPOLL
 
@@ -111,7 +111,42 @@ static void dns_perf_epoll_destroy(void)
     }
 }
 
-/* do epoll wait */
+
+static int dns_perf_epoll_clear_fd(int fd, int mod)
+{
+    int                opcode;
+    struct epoll_event ev;
+
+
+    if (mod == MOD_RD) {
+        ep->fdtab[fd].events &= ~EPOLLIN;
+    } else if (mod == MOD_WR) {
+        ep->fdtab[fd].events &= ~EPOLLOUT;
+    }
+    ev.events = ep->fdtab[fd].events;
+
+    if (ep->fdtab[fd].events == 0) {
+        opcode = EPOLL_CTL_DEL;
+    } else {
+        opcode = EPOLL_CTL_MOD;
+    }
+
+    if (epoll_ctl(ep->fd, opcode, fd, &ev) < 0) {
+        fprintf(stderr, "Error epoll delete fd %d failure.", fd);
+        return -1;
+    }
+
+    ep->fdtab[fd].cb[mod].arg = NULL;
+
+    return 0;
+}
+
+static void *dns_perf_epoll_get_obj_by_fd(int fd, int mod)
+{
+    return ep->fdtab[fd].cb[mod].arg;
+}
+
+
 static int dns_perf_epoll_do_wait(long timeout)
 {
     int nevents;
@@ -181,40 +216,6 @@ static int dns_perf_epoll_set_fd(int fd, int mod, void *arg)
     return 0;
 }
 
-static int dns_perf_epoll_clear_fd(int fd, int mod)
-{
-    int                opcode;
-    struct epoll_event ev;
-
-
-    if (mod == MOD_RD) {
-        ep->fdtab[fd].events &= ~EPOLLIN;
-    } else if (mod == MOD_WR) {
-        ep->fdtab[fd].events &= ~EPOLLOUT;
-    }
-    ev.events = ep->fdtab[fd].events;
-
-    if (ep->fdtab[fd].events == 0) {
-        opcode = EPOLL_CTL_DEL;
-    } else {
-        opcode = EPOLL_CTL_MOD;
-    }
-
-    if (epoll_ctl(ep->fd, opcode, fd, &ev) < 0) {
-        fprintf(stderr, "Error epoll delete fd %d failure.", fd);
-        return -1;
-    }
-
-    ep->fdtab[fd].cb[mod].arg = NULL;
-
-    return 0;
-}
-
-static void *dns_perf_epoll_get_obj_by_fd(int fd, int mod)
-{
-    return ep->fdtab[fd].cb[mod].arg;
-}
-
 static int dns_perf_epoll_is_fdset(int fd, int mod)
 {
     if(((mod == MOD_RD) && ((ep->fdtab[fd].events & EPOLLIN) == EPOLLIN)) ||
@@ -276,7 +277,6 @@ static int dns_perf_kqueue_init()
         goto fail_fdlist;
     }
 
-    kq->monlist_cnt = 0;
     if ((kq->monlist = (struct kevent*) calloc(kq->fd_size,
                                                sizeof(struct kevent))) == NULL)
     {
@@ -298,7 +298,7 @@ static int dns_perf_kqueue_init()
     free(kq->monlist);
  fail_monlist:
     free(kq->fdtab);
- fail_fdlistlist:
+ fail_fdlist:
     close(kq->fd);
     kq->fd = -1;
  fail_kqueue:
@@ -311,7 +311,6 @@ static int dns_perf_kqueue_init()
 static int dns_perf_kqueue_destroy()
 {
     free(kq->fdtab);
-    free(kq->addlist);
     free(kq->evtlist);
     close(kq->fd);
     free(kq);
@@ -319,9 +318,37 @@ static int dns_perf_kqueue_destroy()
     return 0;
 }
 
+static void *dns_perf_kqueue_get_obj_by_fd(int fd, int mod)
+{
+    return kq->fdtab[fd].cb[mod].arg;
+}
+
+
+static int dns_perf_kqueue_clear_fd(int fd, int mod)
+{
+    int  filter;
+
+
+    if (mod == MOD_RD) {
+        filter = EVFILT_READ;
+    } else if (mod == MOD_WR) {
+        filter = EVFILT_READ;
+    } else {
+        return -1;
+    }
+
+    kq->fdtab[fd].events &= ~filter;
+
+    EV_SET(&kq->monlist[fd], fd, filter, EV_DELETE, 0, 0, 0);
+
+    kq->fdtab[fd].cb[mod].arg = NULL;
+
+    return 0;
+}
+
 static int dns_perf_kqueue_do_kevent(long timeout)
 {
-    int             i;
+    int             i, nevents, fd, filter;
     struct timespec ts, *tsp;
     dns_perf_event_ops_t *op;
 
@@ -329,13 +356,13 @@ static int dns_perf_kqueue_do_kevent(long timeout)
         tsp = NULL;
     } else {
         ts.tv_sec = (time_t) timeout / 1000;
-        ts.tv_usec = (long) (timeout % 1000) * 1000;
+        ts.tv_nsec = (long) (timeout % 1000) * 1000000;
         tsp = &ts;
     }
 
     nevents = kevent(kq->fd, kq->monlist, kq->fd_size, kq->evtlist, kq->fd_size, tsp);
 
-    if (nvents < 0) {
+    if (nevents < 0) {
         fprintf(stderr, "kevent error:%s", strerror(errno));
         return -1;
     }
@@ -349,15 +376,15 @@ static int dns_perf_kqueue_do_kevent(long timeout)
         fd = kq->evtlist[i].ident;
         filter = kq->evtlist[i].filter;
 
-        if (filter == EVFLT_READ) {
+        if (filter == EVFILT_READ) {
             op = (dns_perf_event_ops_t *) dns_perf_kqueue_get_obj_by_fd(fd, MOD_RD);
-            dns_perf_epoll_clear_fd(fd, MOD_RD);
+            dns_perf_kqueue_clear_fd(fd, MOD_RD);
             op->recv((void *) op);
         }
 
-        if (filter == EVFLT_WRITE) {
+        if (filter == EVFILT_WRITE) {
             op = (dns_perf_event_ops_t *) dns_perf_kqueue_get_obj_by_fd(fd, MOD_WR);
-            dns_perf_epoll_clear_fd(fd, MOD_WR);
+            dns_perf_kqueue_clear_fd(fd, MOD_WR);
             op->send((void *) op);
         }
 
@@ -404,39 +431,11 @@ static int dns_perf_kqueue_set_fd(int fd, int mod, void *arg)
     return 0;
 }
 
-static int dns_perf_kqueue_clear_fd(int fd, int mod)
-{
-    int  filter;
-    int                opcode;
-    struct epoll_event ev;
-
-
-    if (mod == MOD_RD) {
-        filter = EVFILT_READ;
-    } else if (mod == MOD_WR) {
-        filter = EVFILT_READ;
-    } else {
-        return -1;
-    }
-
-    kq->fdtab[fd].events & = ~filter;
-
-    EV_SET(&kq->monlist[fd], fd, filter, EV_DELETE, 0, 0, 0);
-
-    kq->fdtab[fd].cb[mod].arg = NULL;
-
-    return 0;
-}
-
-static void *dns_perf_kqueue_get_obj_by_fd(int fd, int mod)
-{
-    return kq->fdtab[fd].cb[mod].arg;
-}
 
 static int dns_perf_kqueue_is_fdset(int fd, int mod)
 {
-    if(((mod == MOD_RD) && ((kq->fdtab[fd].events & EVFLT_READ) == EVFLT_READ)) ||
-       ((mod == MOD_WR) && ((kq->fdtab[fd].events & EVFLT_WRITE) == EVFLT_WRITE)))
+    if(((mod == MOD_RD) && ((kq->fdtab[fd].events & EVFILT_READ) == EVFILT_READ)) ||
+       ((mod == MOD_WR) && ((kq->fdtab[fd].events & EVFILT_WRITE) == EVFILT_WRITE)))
     {
         return 1;
     }
@@ -465,17 +464,9 @@ int dns_perf_set_event_sys() {
     dns_perf_eventsys = &dns_perf_epoll_eventsys;
     set = 0;
 #elif defined HAVE_KQUEUE
-    dns_perf_eventsys = $dns_perf_kqueue_eventsys;
+    dns_perf_eventsys = &dns_perf_kqueue_eventsys;
     set = 0;
 #endif
 
-    return -1;
+    return set;
 }
-
-#define dns_perf_eventsys_init()                 dns_perf_eventsys->init()
-#define dns_perf_eventsys_destroy()              dns_perf_eventsys->destroy()
-#define dns_perf_eventsys_dispatch(t)            dns_perf_eventsys->dispatch(t)
-#define dns_perf_eventsys_is_fdset(fd)           dns_perf_eventsys->is_fdset(fd)
-#define dns_perf_eventsys_clear_fd(fd, mod)      dns_perf_eventsys->clear_fd(fd, mod)
-#define dns_perf_eventsys_set_fd(fd, mod, obj)   dns_perf_eventsys->set_fd(fd, mod, obj)
-#define dns_perf_eventsys_get_obj_by_fd(fd, mod) dns_perf_eventsys->get_obj_by_fd(fd, mod)

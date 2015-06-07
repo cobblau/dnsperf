@@ -22,12 +22,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
 #include <sys/time.h>
 #include <signal.h>
 #include <errno.h>
+
+#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <arpa/nameser_compat.h>
+#include <resolv.h>
 
 #include <events.h>
 #include <sock.h>
@@ -499,7 +501,7 @@ int dns_perf_generate_query(query_t *q)
     static unsigned short query_id = 0;
     int                   len;
     unsigned short        net_id;
-    char                 *p, *t;
+    u_char                 *p, *t;
     HEADER               *hp;
     in_addr_t             addr;
 
@@ -512,7 +514,7 @@ int dns_perf_generate_query(query_t *q)
         return -1;
     }
 
-    hp = (HEADER *) str;
+    hp = (HEADER *) q->send_buf;
     hp->rd = 1;    /* recursion */
 
     query_id++;
@@ -520,9 +522,9 @@ int dns_perf_generate_query(query_t *q)
 
     /* set message id */
     net_id = htons(query_id);
-    p = (char *) &net_id;
-    q->send_buf[0] = q[0];
-    q->send_buf[1] = q[1];
+    p = (u_char *) &net_id;
+    q->send_buf[0] = p[0];
+    q->send_buf[1] = p[1];
 
     if (g_real_client) {
         q->send_buf[11] = 1;   /* set additional count to  1 */
@@ -559,7 +561,7 @@ int dns_perf_generate_query(query_t *q)
         *p++ = 0;      /* scope netmask: 0 */
 
         addr = inet_addr(g_real_client);  /* client subnet */
-        t = (char *) &addr;
+        t = (u_char *) &addr;
 
         *p++ = *t++;
         *p++ = *t++;
@@ -700,7 +702,7 @@ int dns_perf_query_recv(void *arg)
 }
 
 
-inline int dns_perf_cancel_timeout_query()
+static int dns_perf_cancel_timeout_query()
 {
     int       i;
     query_t  *query;
@@ -741,7 +743,7 @@ inline int dns_perf_cancel_timeout_query()
  *     Do some preparation before quering.
  *   1. allocate query_array
  */
-inline int dns_perf_prepare()
+static int dns_perf_prepare()
 {
     query_t    *q;
     int         i, index;
@@ -773,7 +775,7 @@ inline int dns_perf_prepare()
 /*
  * Whip query_t to make it as busy as possible.
  */
-inline int dns_perf_whip_query()
+static int dns_perf_whip_query()
 {
     int       i;
     query_t  *q;
@@ -797,7 +799,7 @@ inline int dns_perf_whip_query()
         q->state = F_CONNECTING;
 
         if (dns_perf_generate_query(q) != 0) {
-            reutrn -1;
+            return -1;
         }
 
         gettimeofday(&tv, NULL);
@@ -815,7 +817,7 @@ inline int dns_perf_whip_query()
 }
 
 
-inline int dns_perf_clear_query()
+static int dns_perf_clear_query()
 {
     int i;
     query_t  *q;
@@ -835,7 +837,7 @@ inline int dns_perf_clear_query()
 }
 
 
-inline void dns_perf_statistic()
+static void dns_perf_statistic()
 {
     timeval_t     diff;
     unsigned int  msec;
@@ -848,7 +850,7 @@ inline void dns_perf_statistic()
     printf("\n[Status]DNS Query Performance Testing Finish\n");
     printf("[Result]Quries sent:\t\t%d\n", g_send_number);
     printf("[Result]Quries completed:\t%d\n", g_recv_number);
-    printf("[Result]Complete percentage:\t%.2f%\n\n", g_recv_number * 100.0 / g_send_number);
+    printf("[Result]Complete percentage:\t%.2f\n\n", g_recv_number * 100.0 / g_send_number);
 
     if (g_report_rcode) {
         printf("[Result]Rcode=Success:\t%d\n\n", g_success_number);
@@ -917,9 +919,6 @@ int dns_perf_setup(int argc, char **argv)
 
 int main(int argc, char** argv)
 {
-    int     i, nevents;
-    int     fd;
-    query_t *query;
     timeval_t  now, age;
 
 
@@ -955,7 +954,7 @@ int main(int argc, char** argv)
     }
 
     while (g_stop == 0) {
-        dns_perf_eventsys_dispatch();
+        dns_perf_eventsys_dispatch(g_timeout);
 
         dns_perf_cancel_timeout_query();
 
