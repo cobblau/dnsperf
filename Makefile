@@ -4,16 +4,12 @@ CFLAGS  = -g -Wall
 LIBS    = -lresolv
 shell   = /bin/sh
 ECHO    = /bin/echo
-DEFINES    =
+DEFINES    = -DHAVE_EPOLL
 INC     = -I ./
 
-ifeq ($(SHELL test -f /usr/include/sys/epoll.h && echo yes), yes)
-DEFINES     += -DHAVE_EPOLL
-@echo "Have epoll"
-endif
-
 ifeq ($(shell test -f /usr/include/sys/event.h && echo yes), yes)
-DEFINES     += -DHAVE_KQUEUE
+DEFINES     = -DHAVE_KQUEUE
+@echo "Use Kqueue"
 endif
 
 all: dnsperf

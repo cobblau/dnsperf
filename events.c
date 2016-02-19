@@ -43,8 +43,6 @@ static dns_perf_epoll_data_t *ep = NULL;
 
 static int dns_perf_epoll_init(void)
 {
-    int                 fd;
-    struct epoll_event *ee;
     struct rlimit       limit;
 
     if ((ep = (dns_perf_epoll_data_t *)malloc(sizeof(dns_perf_epoll_data_t))) == NULL) {
@@ -95,7 +93,7 @@ fail_fd:
 }
 
 
-static void dns_perf_epoll_destroy(void)
+static int dns_perf_epoll_destroy(void)
 {
     if (ep) {
         free(ep->fdtab);
@@ -109,6 +107,8 @@ static void dns_perf_epoll_destroy(void)
 
         ep = NULL;
     }
+
+    return 0;
 }
 
 
@@ -149,6 +149,7 @@ static void *dns_perf_epoll_get_obj_by_fd(int fd, int mod)
 
 static int dns_perf_epoll_do_wait(long timeout)
 {
+    int i, fd;
     int nevents;
     dns_perf_event_ops_t *op;
 
@@ -163,15 +164,15 @@ static int dns_perf_epoll_do_wait(long timeout)
         fd = ep->events[i].data.fd;
 
         if (ep->events[i].events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-            op = (dns_perf_event_ops_t *) ep->fdtab[fd].cb[mod].arg;
+            op = (dns_perf_event_ops_t *) ep->fdtab[fd].cb[MOD_WR].arg;
             dns_perf_epoll_clear_fd(fd, MOD_WR);
             op->send((void *) op);
         }
 
         if (ep->events[i].events & (EPOLLIN | EPOLLERR | EPOLLHUP)) {
-            op = (dns_perf_event_ops_t *) ep->fdtab[fd].cb[mod].arg;
+            op = (dns_perf_event_ops_t *) ep->fdtab[fd].cb[MOD_RD].arg;
             dns_perf_epoll_clear_fd(fd, MOD_RD);
-            op->recv((void *) op)
+            op->recv((void *) op);
         }
     }
 
