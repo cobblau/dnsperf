@@ -33,6 +33,7 @@
 
 #include <events.h>
 #include <sock.h>
+#include <time.h>
 
 
 /*
@@ -415,6 +416,10 @@ int dns_perf_parse_args(int argc, char **argv)
         g_query_number = 100000000;
     }
 
+    // limit the number of concurrent queries to the total number of queries
+    if ( g_concurrent_query > g_query_number ) 
+	g_concurrent_query = g_query_number; 
+
     return 0;
 }
 
@@ -667,14 +672,15 @@ int dns_perf_query_send(void *arg)
 
 int dns_perf_query_recv(void *arg)
 {
-    static u_char input[1024];
     int           ret;
     unsigned short  id;
     unsigned short  flags;
     query_t        *q = arg;
+    unsigned char  *rbp;
 
+    rbp = (unsigned char *) ( q->recv_buf + q->recv_pos );
 
-    ret = recv(q->fd, q->recv_buf + q->recv_pos, sizeof(q->recv_buf) - q->recv_pos, 0);
+    ret = recv(q->fd, (void *) rbp, sizeof(q->recv_buf) - q->recv_pos, 0);
 
     if (ret < 0) {
         if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -692,8 +698,8 @@ int dns_perf_query_recv(void *arg)
         close(q->fd);
         q->state = F_UNUSED;
 
-        id = input[0] * 256 + input[1];
-        flags = input[2] * 256 + input[3];
+        id = (unsigned short) rbp[0] * 256 + (unsigned short) rbp[1];
+        flags = (unsigned short) rbp[2] * 256 + (unsigned short) rbp[3];
 
         dns_perf_query_process_response(q, id, flags & 0xF);
     }
@@ -920,11 +926,13 @@ int dns_perf_setup(int argc, char **argv)
 int main(int argc, char** argv)
 {
     timeval_t  now, age;
-
+    int        n_reading;
 
     dns_perf_show_info();
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
+
+    srandom( time( 0 ) );
 
     if (dns_perf_setup(argc, argv) == -1) {
         return -1;
@@ -974,6 +982,20 @@ int main(int argc, char** argv)
 
         dns_perf_whip_query();
     }
+
+    do { 
+	query_t  *query;
+	int i;
+
+	dns_perf_eventsys_dispatch(g_timeout);
+	dns_perf_cancel_timeout_query();
+
+	for ( n_reading = i = 0; i < g_concurrent_query ; i++) {
+	    query = &g_query_array[i];
+	    if (query->state == F_READING )
+		n_reading++;
+	}
+    } while ( n_reading > 0 );
 
     gettimeofday(&g_query_end, NULL);
 
