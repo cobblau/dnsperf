@@ -667,7 +667,7 @@ int dns_perf_query_send(void *arg)
 
 int dns_perf_query_recv(void *arg)
 {
-    static u_char input[1024];
+    //static u_char input[1024];
     int           ret;
     unsigned short  id;
     unsigned short  flags;
@@ -692,8 +692,11 @@ int dns_perf_query_recv(void *arg)
         close(q->fd);
         q->state = F_UNUSED;
 
-        id = input[0] * 256 + input[1];
-        flags = input[2] * 256 + input[3];
+        //id = input[0] * 256 + input[1];
+        //flags = input[2] * 256 + input[3];
+
+        id = q->recv_buf[0] << 8 | q->recv_buf[1];
+        flags = q->recv_buf[2] << 8 | q->recv_buf[3];
 
         dns_perf_query_process_response(q, id, flags & 0xF);
     }
@@ -990,3 +993,4 @@ int main(int argc, char** argv)
 
     return 0;
 }
+
