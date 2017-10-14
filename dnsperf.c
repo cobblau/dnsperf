@@ -699,8 +699,8 @@ int dns_perf_query_recv(void *arg)
         //id = input[0] * 256 + input[1];
         //flags = input[2] * 256 + input[3];
 
-	id = q->recv_buf[0] << 8 | q->recv_buf[1];
-	flags = q->recv_buf[2] << 8 | q->recv_buf[3];
+        id = q->recv_buf[0] << 8 | q->recv_buf[1];
+        flags = q->recv_buf[2] << 8 | q->recv_buf[3];
 
         dns_perf_query_process_response(q, id, flags & 0xF);
     }
