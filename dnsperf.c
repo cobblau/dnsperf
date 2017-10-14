@@ -676,11 +676,8 @@ int dns_perf_query_recv(void *arg)
     unsigned short  id;
     unsigned short  flags;
     query_t        *q = arg;
-    unsigned char  *rbp;
 
-    rbp = (unsigned char *) ( q->recv_buf + q->recv_pos );
-
-    ret = recv(q->fd, (void *) rbp, sizeof(q->recv_buf) - q->recv_pos, 0);
+    ret = recv(q->fd, q->recv_buf + q->recv_pos, sizeof(q->recv_buf) - q->recv_pos, 0);
 
     if (ret < 0) {
         if (errno != EWOULDBLOCK && errno != EAGAIN) {
@@ -698,8 +695,11 @@ int dns_perf_query_recv(void *arg)
         close(q->fd);
         q->state = F_UNUSED;
 
-        id = (unsigned short) rbp[0] * 256 + (unsigned short) rbp[1];
-        flags = (unsigned short) rbp[2] * 256 + (unsigned short) rbp[3];
+	//id = input[0] * 256 + input[1];
+	//flags = input[2] * 256 + input[3];
+
+	id = q->recv_buf[0] << 8 | q->recv_buf[1];
+	flags = q->recv_buf[2] << 8 | q->recv_buf[3];
 
         dns_perf_query_process_response(q, id, flags & 0xF);
     }
